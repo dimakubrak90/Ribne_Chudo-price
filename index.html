@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сканер цін</title>
+
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background: #f2f2f2;
+  }
+  #priceDisplay {
+    padding: 20px;
+    background: #fff;
+    border-radius: 10px;
+    margin-top: 20px;
+    transition: background-color 0.25s;
+  }
+  .controls { margin-top: 15px; }
+  button { padding: 10px 15px; margin-right: 10px; }
+
+  :root {
+    --ok: #a8f3a8;
+    --err: #ffb3b3;
+  }
+
+  input#barcode {
+    width: 100%;
+    font-size: 26px;
+    padding: 12px;
+    box-sizing: border-box;
+  }
+
+  .product-name { font-size: 30px; margin: 0; }
+  .product-price { font-size: 22px; color: #0057b7; }
+  .muted { color: #666; font-size: 14px; }
+</style>
+</head>
+
+<body>
+
+<h2>Перевірка ціни</h2>
+
+<input
+  id="barcode"
+  type="text"
+  placeholder="Скануйте штрихкод"
+  autofocus
+  autocomplete="off"
+  autocapitalize="off"
+  inputmode="none"
+/>
+
+<div id="loadingInfo" class="muted" style="margin-top:10px;"></div>
+
+<div class="controls">
+  <button id="updateCacheBtn">Оновити базу</button>
+  <button id="clearCacheBtn">Очистити кеш</button>
+  <div>Останнє оновлення: <span id="lastUpdate">немає</span></div>
+</div>
+
+<div id="priceDisplay">
+  <h3 id="productName" class="product-name">Назва товару</h3>
+  <p id="productPrice" class="product-price">Ціна за одиницю (опт)</p>
+</div>
+
+<audio id="beep" preload="auto">
+  <source src="beep.wav" type="audio/wav">
+</audio>
+
+<script>
+(function () {
+
+  /* ================== КОНСТАНТИ ================== */
+  const SCRIPT_URL =
+    'https://script.google.com/macros/s/AKfycbwZP14KXpQPgRCzR-ITop_yPcyOqXV0MKJt6uLK-HkKEwD7juo71zcJfNbycTB2X6ofWg/exec';
+
+  const CACHE_KEY = 'p_cache_v1';
+  const CACHE_TS_KEY = 'p_cache_ts_v1';
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  /* ================== DOM ================== */
+  const input = document.getElementById('barcode');
+  const nameEl = document.getElementById('productName');
+  const priceEl = document.getElementById('productPrice');
+  const loadingInfo = document.getElementById('loadingInfo');
+  const lastUpdateEl = document.getElementById('lastUpdate');
+  const priceBox = document.getElementById('priceDisplay');
+  const updateBtn = document.getElementById('updateCacheBtn');
+  const clearBtn = document.getElementById('clearCacheBtn');
+  const beep = document.getElementById('beep');
+
+  /* ================== УТИЛІТИ ================== */
+  function normalizeCode(code) {
+    return String(code).replace(/[\s\r\n]+/g, '').trim();
+  }
+
+  function searchInCache(code) {
+    try {
+      const map = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+      return map[normalizeCode(code)] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderLastUpdate() {
+    const ts = localStorage.getItem(CACHE_TS_KEY);
+    lastUpdateEl.textContent =
+      ts ? new Date(Number(ts)).toLocaleString() : 'немає';
+  }
+
+  function playBeep() {
+    try { beep.play().catch(() => {}); } catch {}
+  }
+
+  function showProduct(product) {
+    if (product) {
+      nameEl.textContent = product.name;
+      priceEl.textContent = `Ціна за одиницю (опт): ${product.price} грн`;
+      priceBox.style.backgroundColor = 'var(--ok)';
+      playBeep();
+    } else {
+      nameEl.textContent = '❌ Товар не знайдено';
+      priceEl.textContent = '';
+      priceBox.style.backgroundColor = 'var(--err)';
+    }
+
+    setTimeout(() => {
+      priceBox.style.backgroundColor = '#fff';
+    }, 500);
+  }
+
+  /* ================== КЕШ ================== */
+  async function loadCache(force = false) {
+    try {
+      const ts = localStorage.getItem(CACHE_TS_KEY);
+      const now = Date.now();
+
+      if (!force && ts && now - Number(ts) < DAY_MS) {
+        loadingInfo.textContent = '✅ База з кешу';
+        setTimeout(() => loadingInfo.textContent = '', 1200);
+        renderLastUpdate();
+        return;
+      }
+
+      loadingInfo.textContent = '⏳ Оновлення бази...';
+
+      const res = await fetch(SCRIPT_URL, { cache: 'no-store' });
+      const data = await res.json();
+      const products = Array.isArray(data.products) ? data.products : [];
+
+      const map = {};
+      products.forEach(p => {
+        if (p.barcode) {
+          map[normalizeCode(p.barcode)] = {
+            name: String(p.name || 'Без назви'),
+            price: String(p.price || '')
+          };
+        }
+      });
+
+      localStorage.setItem(CACHE_KEY, JSON.stringify(map));
+      localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
+
+      loadingInfo.textContent =
+        `✅ База оновлена (${Object.keys(map).length})`;
+
+      renderLastUpdate();
+      setTimeout(() => loadingInfo.textContent = '', 2000);
+
+    } catch {
+      loadingInfo.textContent = '⚠️ Помилка завантаження';
+      setTimeout(() => loadingInfo.textContent = '', 3000);
+    }
+  }
+
+  /* ================== СКАНЕР (БЕЗ БЛОКУВАНЬ) ================== */
+  function handleScan() {
+    const code = normalizeCode(input.value);
+    input.value = '';
+    input.focus();
+
+    if (!code) return;
+
+    console.log('SCAN:', code);
+
+    /* 1️⃣ миттєво з кешу */
+    const cached = searchInCache(code);
+    showProduct(cached);
+
+    /* 2️⃣ сервер — у фоні */
+    fetch(`${SCRIPT_URL}?barcode=${encodeURIComponent(code)}`, {
+      cache: 'no-store'
+    })
+      .then(r => r.json())
+      .then(data => {
+        const p = data?.data;
+        if (!p || (!p.name && !p.price)) return;
+
+        const product = {
+          name: String(p.name || 'Без назви'),
+          price: String(p.price || '')
+        };
+
+        showProduct(product);
+
+        const map = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+        map[code] = product;
+        localStorage.setItem(CACHE_KEY, JSON.stringify(map));
+      })
+      .catch(() => {});
+  }
+
+  /* ================== EVENTS ================== */
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleScan();
+    }
+  });
+
+  updateBtn.onclick = () => loadCache(true);
+
+  clearBtn.onclick = () => {
+    localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(CACHE_TS_KEY);
+    renderLastUpdate();
+    loadingInfo.textContent = '🗑️ Кеш очищено';
+    setTimeout(() => loadingInfo.textContent = '', 1200);
+  };
+
+  /* ================== INIT ================== */
+  (function init() {
+    if (!localStorage.getItem(CACHE_KEY)) {
+      localStorage.setItem(CACHE_KEY, '{}');
+    }
+    renderLastUpdate();
+    loadCache(false);
+    input.focus();
+  })();
+
+})();
+</script>
+
+</body>
+</html>
