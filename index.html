@@ -1,285 +1,134 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Перевірка ціни</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Сканер цін</title>
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      padding: 20px;
-      margin: 0;
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        color: #fff;
+        font-family: Arial, sans-serif;
+        height: 100%;
+        overflow: hidden;
     }
 
-    h2 {
-      margin-top: 0;
+    .container {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        text-align: center;
+        padding: 20px;
     }
 
-    input#barcode {
-      width: 100%;
-      font-size: 26px;
-      padding: 12px;
-      box-sizing: border-box;
-      border: 2px solid #f5b400;
-      border-radius: 8px;
-      background: #fff;
+    .title {
+        font-size: 36px;
+        opacity: 0.7;
+        margin-bottom: 30px;
     }
 
-    .controls {
-      margin-top: 15px;
+    .product {
+        font-size: 34px;
+        margin-bottom: 20px;
     }
 
-    button {
-      padding: 10px 16px;
-      font-size: 16px;
-      margin-right: 10px;
+    .price {
+        font-size: 60px;
+        font-weight: bold;
+        color: #00ff88;
     }
 
-    .muted {
-      color: #666;
-      font-size: 14px;
-      margin-top: 5px;
+    .error {
+        color: #ff5555;
     }
 
-    #priceDisplay {
-      margin-top: 20px;
-      padding: 25px;
-      background: #fff;
-      border-radius: 10px;
-      transition: background-color 0.25s;
+    /* приховане поле, щоб клавіатура НЕ зʼявлялась */
+    input {
+        position: absolute;
+        opacity: 0;
+        height: 0;
+        width: 0;
+        pointer-events: none;
     }
-
-    :root {
-      --ok: #a8f3a8;
-      --err: #ffb3b3;
-    }
-
-    .product-name {
-      font-size: 30px;
-      margin: 0;
-    }
-
-    .product-price {
-      font-size: 24px;
-      color: #0057b7;
-      margin-top: 10px;
-    }
-  </style>
+</style>
 </head>
 
 <body>
-
-<h2>Перевірка ціни</h2>
-
-<!-- input ТІЛЬКИ для фокуса -->
-<input
-  id="barcode"
-  type="text"
-  placeholder="Скануйте штрихкод"
-  disabled
->
-
-<div class="controls">
-  <button id="updateCacheBtn">Оновити базу</button>
-  <button id="clearCacheBtn">Очистити кеш</button>
-  <div class="muted">
-    Останнє оновлення: <span id="lastUpdate">немає</span>
-  </div>
+<div class="container">
+    <div class="title">Скануйте товар</div>
+    <div class="product" id="product">—</div>
+    <div class="price" id="price">—</div>
 </div>
 
-<div id="priceDisplay">
-  <h3 id="productName" class="product-name">Назва товару</h3>
-  <div id="productPrice" class="product-price">Ціна</div>
-</div>
+<!-- приховане поле -->
+<input type="text" id="hiddenInput" autocomplete="off">
 
-<div id="loadingInfo" class="muted"></div>
-
-<audio id="beep" preload="auto">
-  <source src="beep.wav" type="audio/wav">
-</audio>
+<!-- ⬇️ ЧАСТИНА 2 ПІДКЛЮЧАЄТЬСЯ НИЖЧЕ -->
 <script>
-(function () {
+const API_URL = "https://script.google.com/macros/s/AKfycbw0T5HLy5L5g6ydht5IL8xexWzwdJdDx-PzsqbGo02dGV5wvJcfHbXYH-nQon2v9_1N1w/exec";
 
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwZP14KXpQPgRCzR-ITop_yPcyOqXV0MKJt6uLK-HkKEwD7juo71zcJfNbycTB2X6ofWg/exec';
-  const CACHE_KEY = 'price_cache';
-  const CACHE_TS_KEY = 'price_cache_ts';
-  const DAY_MS = 24 * 60 * 60 * 1000;
+let buffer = "";
+let scanTimer = null;
+const SCAN_TIMEOUT = 150; // мс – ідеально для USB-сканера
 
-  const input = document.getElementById('barcode');
-  const nameEl = document.getElementById('productName');
-  const priceEl = document.getElementById('productPrice');
-  const priceBox = document.getElementById('priceDisplay');
-  const updateBtn = document.getElementById('updateCacheBtn');
-  const clearBtn = document.getElementById('clearCacheBtn');
-  const lastUpdateEl = document.getElementById('lastUpdate');
-  const loadingInfo = document.getElementById('loadingInfo');
-  const beep = document.getElementById('beep');
+document.addEventListener("keydown", (e) => {
+    // ігноруємо службові кнопки
+    if (e.key.length > 1 && e.key !== "Enter") return;
 
-  /* =========================
-     ФОКУС (для WebView)
-  ========================== */
-  function forceFocus() {
-    setTimeout(() => input.focus(), 100);
-  }
+    if (scanTimer) clearTimeout(scanTimer);
 
-  /* =========================
-     ЗВУК
-  ========================== */
-  function playBeep() {
-    try {
-      beep.currentTime = 0;
-      beep.play();
-    } catch {}
-  }
-
-  /* =========================
-     КЕШ
-  ========================== */
-  function renderLastUpdate() {
-    const ts = localStorage.getItem(CACHE_TS_KEY);
-    if (ts) {
-      lastUpdateEl.textContent = new Date(+ts).toLocaleString();
-    }
-  }
-
-  async function loadCache(force = false) {
-    const ts = localStorage.getItem(CACHE_TS_KEY);
-    if (!force && ts && Date.now() - ts < DAY_MS) {
-      renderLastUpdate();
-      forceFocus();
-      return;
-    }
-
-    loadingInfo.textContent = 'Завантаження бази...';
-
-    try {
-      const res = await fetch(SCRIPT_URL + '?all=1', { cache: 'no-store' });
-      const data = await res.json();
-      const map = {};
-
-      (data.products || []).forEach(p => {
-        if (p.barcode) {
-          map[String(p.barcode).trim()] = {
-            name: p.name || 'Без назви',
-            price: p.price || ''
-          };
+    if (e.key === "Enter") {
+        if (buffer.length > 3) {
+            handleScan(buffer);
         }
-      });
-
-      localStorage.setItem(CACHE_KEY, JSON.stringify(map));
-      localStorage.setItem(CACHE_TS_KEY, Date.now());
-      renderLastUpdate();
-      loadingInfo.textContent = '';
-      forceFocus();
-    } catch {
-      loadingInfo.textContent = 'Помилка оновлення';
-    }
-  }
-
-  /* =========================
-     ВІДОБРАЖЕННЯ
-  ========================== */
-  function showProduct(p) {
-    if (p) {
-      nameEl.textContent = p.name;
-      priceEl.textContent = 'Ціна: ' + p.price + ' грн';
-      priceBox.style.backgroundColor = 'var(--ok)';
-      playBeep();
-    } else {
-      nameEl.textContent = '❌ Товар не знайдено';
-      priceEl.textContent = '';
-      priceBox.style.backgroundColor = 'var(--err)';
+        buffer = "";
+        return;
     }
 
-    setTimeout(() => {
-      priceBox.style.backgroundColor = '#fff';
-    }, 600);
-  }
+    buffer += e.key;
 
-  /* =========================
-     СКАНЕР (КЛЮЧОВЕ!)
-  ========================== */
-  let scanBuffer = '';
-  let scanTimer = null;
-  const SCAN_DELAY = 50;
-
-  document.addEventListener('keydown', (e) => {
-
-    // ігноруємо пульт
-    if (e.key.startsWith('Arrow')) return;
-
-    // ENTER — кінець штрихкоду
-    if (e.key === 'Enter') {
-      if (scanBuffer.length >= 6) {
-        processBarcode(scanBuffer);
-      }
-      scanBuffer = '';
-      return;
-    }
-
-    // тільки цифри
-    if (!/^[0-9]$/.test(e.key)) return;
-
-    scanBuffer += e.key;
-
-    clearTimeout(scanTimer);
     scanTimer = setTimeout(() => {
-      if (scanBuffer.length >= 6) {
-        processBarcode(scanBuffer);
-      }
-      scanBuffer = '';
-    }, SCAN_DELAY);
-  });
+        if (buffer.length > 3) {
+            handleScan(buffer);
+        }
+        buffer = "";
+    }, SCAN_TIMEOUT);
+});
 
-  async function processBarcode(code) {
-    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+function handleScan(barcode) {
+    document.getElementById("product").textContent = "Пошук...";
+    document.getElementById("price").textContent = "";
 
-    if (cache[code]) {
-      showProduct(cache[code]);
-    } else {
-      showProduct(null);
-    }
+    fetch(API_URL + "?barcode=" + encodeURIComponent(barcode))
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById("product").textContent = "Товар не знайдено";
+                document.getElementById("product").classList.add("error");
+                document.getElementById("price").textContent = "";
+                return;
+            }
 
-    try {
-      const res = await fetch(SCRIPT_URL + '?barcode=' + encodeURIComponent(code));
-      const data = await res.json();
+            document.getElementById("product").classList.remove("error");
+            document.getElementById("product").textContent = data.name;
+            document.getElementById("price").textContent = data.price + " грн";
+        })
+        .catch(() => {
+            document.getElementById("product").textContent = "Помилка зʼєднання";
+            document.getElementById("product").classList.add("error");
+            document.getElementById("price").textContent = "";
+        });
+}
 
-      if (data?.data) {
-        showProduct(data.data);
-        cache[code] = data.data;
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-      }
-    } catch {}
-
-    forceFocus();
-  }
-
-  /* =========================
-     КНОПКИ
-  ========================== */
-  updateBtn.onclick = () => loadCache(true);
-  clearBtn.onclick = () => {
-    localStorage.clear();
-    lastUpdateEl.textContent = 'немає';
-    forceFocus();
-  };
-
-  /* =========================
-     INIT
-  ========================== */
-  (function init() {
-    if (!localStorage.getItem(CACHE_KEY)) {
-      localStorage.setItem(CACHE_KEY, '{}');
-    }
-    renderLastUpdate();
-    loadCache(false);
-    forceFocus();
-  })();
-
-})();
+// щоб WebView не відкривав клавіатуру
+document.body.addEventListener("click", () => {
+    document.getElementById("hiddenInput").focus();
+});
 </script>
-
 </body>
 </html>
