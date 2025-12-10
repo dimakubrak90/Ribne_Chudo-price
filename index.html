@@ -27,7 +27,7 @@ html, body {
 
 .title {
     font-size: 36px;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
 }
 
 .product {
@@ -45,11 +45,13 @@ html, body {
     color: #ff5555;
 }
 
-/* реальний input для сканера */
+/* input видно ТІЛЬКИ системі */
 #scannerInput {
     position: absolute;
-    top: -100px;
-    opacity: 0;
+    bottom: 0;
+    height: 1px;
+    width: 1px;
+    opacity: 0.01;
 }
 </style>
 </head>
@@ -64,8 +66,6 @@ html, body {
 <input
     id="scannerInput"
     type="text"
-    readonly
-    inputmode="none"
     autocomplete="off"
     autocorrect="off"
     spellcheck="false"
@@ -77,15 +77,17 @@ const input = document.getElementById("scannerInput");
 const productEl = document.getElementById("product");
 const priceEl = document.getElementById("price");
 
-/* ✅ ЗАВЖДИ ТРИМАЄМО ФОКУС */
-function forceFocus() {
-    input.focus();
-}
-setInterval(forceFocus, 300);
-window.onload = forceFocus;
-document.body.addEventListener("click", forceFocus);
+// ✅ один раз ставимо фокус
+window.onload = () => {
+    setTimeout(() => input.focus(), 300);
+};
 
-/* ✅ СТАБІЛЬНЕ СКАНУВАННЯ */
+// ✅ повертаємо фокус після пульта
+document.addEventListener("keydown", () => {
+    input.focus();
+});
+
+// ✅ обробка сканування
 let scanTimer = null;
 
 input.addEventListener("input", () => {
@@ -97,7 +99,7 @@ input.addEventListener("input", () => {
 
         if (code.length < 4) return;
         scan(code);
-    }, 80);
+    }, 120);
 });
 
 function scan(barcode) {
