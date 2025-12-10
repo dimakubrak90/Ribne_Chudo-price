@@ -1,127 +1,119 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Сканер цін</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Перевірка ціни</title>
 
 <style>
-html, body {
-    margin: 0;
-    padding: 0;
-    background: #000;
-    color: #fff;
-    font-family: Arial, sans-serif;
-    height: 100%;
-    overflow: hidden;
-}
+    body {
+        margin: 0;
+        background: #111;
+        color: #fff;
+        font-family: Arial, sans-serif;
+        text-align: center;
+    }
 
-.container {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-}
+    .container {
+        padding: 40px;
+    }
 
-.title {
-    font-size: 36px;
-    margin-bottom: 20px;
-}
+    h1 {
+        font-size: 42px;
+        margin-bottom: 10px;
+    }
 
-.product {
-    font-size: 34px;
-    margin-bottom: 20px;
-}
+    #status {
+        font-size: 26px;
+        margin: 20px 0;
+        color: #aaa;
+    }
 
-.price {
-    font-size: 60px;
-    font-weight: bold;
-    color: #00ff88;
-}
+    #barcodeView {
+        font-size: 22px;
+        margin: 10px 0;
+        color: #666;
+    }
 
-.error {
-    color: #ff5555;
-}
-
-/* input видно ТІЛЬКИ системі */
-#scannerInput {
-    position: absolute;
-    bottom: 0;
-    height: 1px;
-    width: 1px;
-    opacity: 0.01;
-}
+    #price {
+        font-size: 72px;
+        font-weight: bold;
+        margin-top: 30px;
+        color: #00ff99;
+    }
 </style>
 </head>
+
 <body>
-
 <div class="container">
-    <div class="title">Скануйте товар</div>
-    <div id="product" class="product">—</div>
-    <div id="price" class="price">—</div>
+    <h1>Перевірка ціни</h1>
+    <div id="status">Скануйте штрихкод</div>
+    <div id="barcodeView"></div>
+    <div id="price"></div>
 </div>
-
-<input
-    id="scannerInput"
-    type="text"
-    autocomplete="off"
-    autocorrect="off"
-    spellcheck="false"
-/>
 <script>
-const API_URL = "https://script.google.com/macros/s/AKfycbw0T5HLy5L5g6ydht5IL8xexWzwdJdDx-PzsqbGo02dGV5wvJcfHbXYH-nQon2v9_1N1w/exec";
+const API_URL = "https://ribne-chudo-price.netlify.app/"; // ✅ залиш як є
 
-const input = document.getElementById("scannerInput");
-const productEl = document.getElementById("product");
-const priceEl = document.getElementById("price");
+let buffer = "";
+let lastKeyTime = Date.now();
 
-// ✅ один раз ставимо фокус
-window.onload = () => {
-    setTimeout(() => input.focus(), 300);
-};
+document.addEventListener("keydown", (e) => {
+    // ❌ ігноруємо кнопки пульта
+    if (
+        e.key === "Enter" && buffer.length === 0 ||
+        e.key.startsWith("Arrow") ||
+        e.key === "Back" ||
+        e.key === "Home"
+    ) {
+        return;
+    }
 
-// ✅ повертаємо фокус після пульта
-document.addEventListener("keydown", () => {
-    input.focus();
+    const now = Date.now();
+
+    // якщо пауза між символами >100мс — це не сканер
+    if (now - lastKeyTime > 100) {
+        buffer = "";
+    }
+
+    lastKeyTime = now;
+
+    // ✅ Enter від СКАНЕРА = кінець коду
+    if (e.key === "Enter") {
+        if (buffer.length >= 6) {
+            handleBarcode(buffer);
+        }
+        buffer = "";
+        return;
+    }
+
+    // ✅ тільки цифри
+    if (/^[0-9]$/.test(e.key)) {
+        buffer += e.key;
+        document.getElementById("barcodeView").innerText =
+            "Код: " + buffer;
+    }
 });
 
-// ✅ обробка сканування
-let scanTimer = null;
+function handleBarcode(code) {
+    document.getElementById("status").innerText = "Пошук ціни...";
+    document.getElementById("price").innerText = "";
 
-input.addEventListener("input", () => {
-    clearTimeout(scanTimer);
-
-    scanTimer = setTimeout(() => {
-        const code = input.value.trim();
-        input.value = "";
-
-        if (code.length < 4) return;
-        scan(code);
-    }, 120);
-});
-
-function scan(barcode) {
-    productEl.classList.remove("error");
-    productEl.textContent = "Пошук...";
-    priceEl.textContent = "";
-
-    fetch(API_URL + "?barcode=" + encodeURIComponent(barcode))
-        .then(r => r.json())
+    fetch(API_URL + "?barcode=" + code)
+        .then(res => res.json())
         .then(data => {
-            if (data.error) {
-                productEl.textContent = "Товар не знайдено";
-                productEl.classList.add("error");
-                return;
+            if (data.price) {
+                document.getElementById("price").innerText =
+                    data.price + " грн";
+                document.getElementById("status").innerText =
+                    data.name || "Знайдено";
+            } else {
+                document.getElementById("status").innerText =
+                    "Товар не знайдено";
             }
-
-            productEl.textContent = data.name;
-            priceEl.textContent = data.price + " грн";
         })
         .catch(() => {
-            productEl.textContent = "Помилка зʼєднання";
-            productEl.classList.add("error");
+            document.getElementById("status").innerText =
+                "Помилка з'єднання";
         });
 }
 </script>
