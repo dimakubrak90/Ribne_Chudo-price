@@ -27,7 +27,13 @@ html, body {
 
 .title {
     font-size: 36px;
-    opacity: 0.7;
+    opacity: 0.8;
+    margin-bottom: 20px;
+}
+
+.hint {
+    font-size: 22px;
+    opacity: 0.5;
     margin-bottom: 30px;
 }
 
@@ -46,7 +52,7 @@ html, body {
     color: #ff5555;
 }
 
-/* Input для сканера (невидимий) */
+/* input для сканера */
 #scannerInput {
     position: absolute;
     top: -100px;
@@ -58,6 +64,7 @@ html, body {
 <body>
 <div class="container">
     <div class="title">Скануйте товар</div>
+    <div class="hint" id="hint">Натисніть OK для початку</div>
     <div class="product" id="product">—</div>
     <div class="price" id="price">—</div>
 </div>
@@ -68,7 +75,6 @@ html, body {
     autocomplete="off"
     autocorrect="off"
     spellcheck="false"
-    inputmode="none"
 />
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbw0T5HLy5L5g6ydht5IL8xexWzwdJdDx-PzsqbGo02dGV5wvJcfHbXYH-nQon2v9_1N1w/exec";
@@ -76,23 +82,39 @@ const API_URL = "https://script.google.com/macros/s/AKfycbw0T5HLy5L5g6ydht5IL8xe
 const input = document.getElementById("scannerInput");
 const productEl = document.getElementById("product");
 const priceEl = document.getElementById("price");
+const hintEl = document.getElementById("hint");
 
-// ✅ фокус ЗАВЖДИ
-function focusInput() {
-    input.focus();
-}
-window.onload = focusInput;
-setInterval(focusInput, 300);
-document.body.addEventListener("click", focusInput);
+let activated = false;
 
-// ✅ подія сканування
-input.addEventListener("change", () => {
-    const barcode = input.value.trim();
-    input.value = "";
+// ✅ 1. АКТИВАЦІЯ ЧЕРЕЗ ENTER / OK
+document.addEventListener("keydown", (e) => {
+    if (!activated && (e.key === "Enter" || e.key === "OK")) {
+        activated = true;
+        hintEl.style.display = "none";
 
-    if (barcode.length < 4) return;
+        input.focus();
 
-    handleScan(barcode);
+        // ✅ приховуємо клавіатуру
+        setTimeout(() => {
+            input.blur();
+            input.focus();
+        }, 100);
+    }
+});
+
+// ✅ 2. СКАНУВАННЯ
+let scanTimeout = null;
+
+input.addEventListener("input", () => {
+    if (scanTimeout) clearTimeout(scanTimeout);
+
+    scanTimeout = setTimeout(() => {
+        const barcode = input.value.trim();
+        input.value = "";
+
+        if (barcode.length < 4) return;
+        handleScan(barcode);
+    }, 50);
 });
 
 function handleScan(barcode) {
@@ -101,10 +123,8 @@ function handleScan(barcode) {
     priceEl.textContent = "";
 
     fetch(API_URL + "?barcode=" + encodeURIComponent(barcode))
-        .then(r => r.text())
-        .then(t => {
-            const data = JSON.parse(t);
-
+        .then(r => r.json())
+        .then(data => {
             if (data.error) {
                 productEl.textContent = "Товар не знайдено";
                 productEl.classList.add("error");
