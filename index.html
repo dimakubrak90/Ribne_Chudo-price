@@ -6,55 +6,52 @@
 <title>Сканер цін</title>
 
 <style>
-    html, body {
-        margin: 0;
-        padding: 0;
-        background: #000;
-        color: #fff;
-        font-family: Arial, sans-serif;
-        height: 100%;
-        overflow: hidden;
-    }
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    height: 100%;
+    overflow: hidden;
+}
 
-    .container {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        height: 100%;
-        text-align: center;
-        padding: 20px;
-    }
+.container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    text-align: center;
+}
 
-    .title {
-        font-size: 36px;
-        opacity: 0.7;
-        margin-bottom: 30px;
-    }
+.title {
+    font-size: 36px;
+    opacity: 0.7;
+    margin-bottom: 30px;
+}
 
-    .product {
-        font-size: 34px;
-        margin-bottom: 20px;
-    }
+.product {
+    font-size: 34px;
+    margin-bottom: 20px;
+}
 
-    .price {
-        font-size: 60px;
-        font-weight: bold;
-        color: #00ff88;
-    }
+.price {
+    font-size: 60px;
+    font-weight: bold;
+    color: #00ff88;
+}
 
-    .error {
-        color: #ff5555;
-    }
+.error {
+    color: #ff5555;
+}
 
-    /* приховане поле, щоб клавіатура НЕ зʼявлялась */
-    input {
-        position: absolute;
-        opacity: 0;
-        height: 0;
-        width: 0;
-        pointer-events: none;
-    }
+/* Поле для сканера */
+#scannerInput {
+    position: absolute;
+    top: -100px;
+    opacity: 0;
+}
 </style>
 </head>
 
@@ -65,70 +62,64 @@
     <div class="price" id="price">—</div>
 </div>
 
-<!-- приховане поле -->
-<input type="text" id="hiddenInput" autocomplete="off">
-
-<!-- ⬇️ ЧАСТИНА 2 ПІДКЛЮЧАЄТЬСЯ НИЖЧЕ -->
+<!-- ОБОВʼЯЗКОВИЙ input -->
+<input
+    type="text"
+    id="scannerInput"
+    autocomplete="off"
+    autocorrect="off"
+    spellcheck="false"
+    inputmode="none"
+    readonly
+>
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbw0T5HLy5L5g6ydht5IL8xexWzwdJdDx-PzsqbGo02dGV5wvJcfHbXYH-nQon2v9_1N1w/exec";
 
-let buffer = "";
-let scanTimer = null;
-const SCAN_TIMEOUT = 150; // мс – ідеально для USB-сканера
+const input = document.getElementById("scannerInput");
+const productEl = document.getElementById("product");
+const priceEl = document.getElementById("price");
 
-document.addEventListener("keydown", (e) => {
-    // ігноруємо службові кнопки
-    if (e.key.length > 1 && e.key !== "Enter") return;
+// Фокус завжди
+function keepFocus() {
+    input.focus();
+}
+setInterval(keepFocus, 500);
+window.onload = keepFocus;
 
-    if (scanTimer) clearTimeout(scanTimer);
+// Сканування через input
+input.addEventListener("input", () => {
+    const barcode = input.value.trim();
+    if (barcode.length < 4) return;
 
-    if (e.key === "Enter") {
-        if (buffer.length > 3) {
-            handleScan(buffer);
-        }
-        buffer = "";
-        return;
-    }
-
-    buffer += e.key;
-
-    scanTimer = setTimeout(() => {
-        if (buffer.length > 3) {
-            handleScan(buffer);
-        }
-        buffer = "";
-    }, SCAN_TIMEOUT);
+    input.value = "";
+    handleScan(barcode);
 });
 
 function handleScan(barcode) {
-    document.getElementById("product").textContent = "Пошук...";
-    document.getElementById("price").textContent = "";
+    productEl.classList.remove("error");
+    productEl.textContent = "Пошук...";
+    priceEl.textContent = "";
 
     fetch(API_URL + "?barcode=" + encodeURIComponent(barcode))
         .then(res => res.json())
         .then(data => {
             if (data.error) {
-                document.getElementById("product").textContent = "Товар не знайдено";
-                document.getElementById("product").classList.add("error");
-                document.getElementById("price").textContent = "";
+                productEl.textContent = "Товар не знайдено";
+                productEl.classList.add("error");
                 return;
             }
 
-            document.getElementById("product").classList.remove("error");
-            document.getElementById("product").textContent = data.name;
-            document.getElementById("price").textContent = data.price + " грн";
+            productEl.textContent = data.name;
+            priceEl.textContent = data.price + " грн";
         })
         .catch(() => {
-            document.getElementById("product").textContent = "Помилка зʼєднання";
-            document.getElementById("product").classList.add("error");
-            document.getElementById("price").textContent = "";
+            productEl.textContent = "Помилка зʼєднання";
+            productEl.classList.add("error");
         });
 }
 
-// щоб WebView не відкривав клавіатуру
-document.body.addEventListener("click", () => {
-    document.getElementById("hiddenInput").focus();
-});
+// Клік — теж повертає фокус
+document.body.addEventListener("click", keepFocus);
 </script>
 </body>
 </html>
