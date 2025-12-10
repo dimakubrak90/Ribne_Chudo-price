@@ -17,23 +17,16 @@ html, body {
 }
 
 .container {
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    height: 100%;
     text-align: center;
 }
 
 .title {
     font-size: 36px;
-    opacity: 0.8;
-    margin-bottom: 20px;
-}
-
-.hint {
-    font-size: 22px;
-    opacity: 0.5;
     margin-bottom: 30px;
 }
 
@@ -52,7 +45,7 @@ html, body {
     color: #ff5555;
 }
 
-/* input для сканера */
+/* реальний input для сканера */
 #scannerInput {
     position: absolute;
     top: -100px;
@@ -60,18 +53,19 @@ html, body {
 }
 </style>
 </head>
-
 <body>
+
 <div class="container">
     <div class="title">Скануйте товар</div>
-    <div class="hint" id="hint">Натисніть OK для початку</div>
-    <div class="product" id="product">—</div>
-    <div class="price" id="price">—</div>
+    <div id="product" class="product">—</div>
+    <div id="price" class="price">—</div>
 </div>
 
 <input
-    type="text"
     id="scannerInput"
+    type="text"
+    readonly
+    inputmode="none"
     autocomplete="off"
     autocorrect="off"
     spellcheck="false"
@@ -82,42 +76,31 @@ const API_URL = "https://script.google.com/macros/s/AKfycbw0T5HLy5L5g6ydht5IL8xe
 const input = document.getElementById("scannerInput");
 const productEl = document.getElementById("product");
 const priceEl = document.getElementById("price");
-const hintEl = document.getElementById("hint");
 
-let activated = false;
+/* ✅ ЗАВЖДИ ТРИМАЄМО ФОКУС */
+function forceFocus() {
+    input.focus();
+}
+setInterval(forceFocus, 300);
+window.onload = forceFocus;
+document.body.addEventListener("click", forceFocus);
 
-// ✅ 1. АКТИВАЦІЯ ЧЕРЕЗ ENTER / OK
-document.addEventListener("keydown", (e) => {
-    if (!activated && (e.key === "Enter" || e.key === "OK")) {
-        activated = true;
-        hintEl.style.display = "none";
-
-        input.focus();
-
-        // ✅ приховуємо клавіатуру
-        setTimeout(() => {
-            input.blur();
-            input.focus();
-        }, 100);
-    }
-});
-
-// ✅ 2. СКАНУВАННЯ
-let scanTimeout = null;
+/* ✅ СТАБІЛЬНЕ СКАНУВАННЯ */
+let scanTimer = null;
 
 input.addEventListener("input", () => {
-    if (scanTimeout) clearTimeout(scanTimeout);
+    clearTimeout(scanTimer);
 
-    scanTimeout = setTimeout(() => {
-        const barcode = input.value.trim();
+    scanTimer = setTimeout(() => {
+        const code = input.value.trim();
         input.value = "";
 
-        if (barcode.length < 4) return;
-        handleScan(barcode);
-    }, 50);
+        if (code.length < 4) return;
+        scan(code);
+    }, 80);
 });
 
-function handleScan(barcode) {
+function scan(barcode) {
     productEl.classList.remove("error");
     productEl.textContent = "Пошук...";
     priceEl.textContent = "";
