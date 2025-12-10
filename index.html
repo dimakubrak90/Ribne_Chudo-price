@@ -46,7 +46,7 @@ html, body {
     color: #ff5555;
 }
 
-/* Поле для сканера */
+/* Input для сканера (невидимий) */
 #scannerInput {
     position: absolute;
     top: -100px;
@@ -62,7 +62,6 @@ html, body {
     <div class="price" id="price">—</div>
 </div>
 
-<!-- ОБОВʼЯЗКОВИЙ input -->
 <input
     type="text"
     id="scannerInput"
@@ -70,8 +69,7 @@ html, body {
     autocorrect="off"
     spellcheck="false"
     inputmode="none"
-    readonly
->
+/>
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbw0T5HLy5L5g6ydht5IL8xexWzwdJdDx-PzsqbGo02dGV5wvJcfHbXYH-nQon2v9_1N1w/exec";
 
@@ -79,19 +77,21 @@ const input = document.getElementById("scannerInput");
 const productEl = document.getElementById("product");
 const priceEl = document.getElementById("price");
 
-// Фокус завжди
-function keepFocus() {
+// ✅ фокус ЗАВЖДИ
+function focusInput() {
     input.focus();
 }
-setInterval(keepFocus, 500);
-window.onload = keepFocus;
+window.onload = focusInput;
+setInterval(focusInput, 300);
+document.body.addEventListener("click", focusInput);
 
-// Сканування через input
-input.addEventListener("input", () => {
+// ✅ подія сканування
+input.addEventListener("change", () => {
     const barcode = input.value.trim();
+    input.value = "";
+
     if (barcode.length < 4) return;
 
-    input.value = "";
     handleScan(barcode);
 });
 
@@ -101,8 +101,10 @@ function handleScan(barcode) {
     priceEl.textContent = "";
 
     fetch(API_URL + "?barcode=" + encodeURIComponent(barcode))
-        .then(res => res.json())
-        .then(data => {
+        .then(r => r.text())
+        .then(t => {
+            const data = JSON.parse(t);
+
             if (data.error) {
                 productEl.textContent = "Товар не знайдено";
                 productEl.classList.add("error");
@@ -117,9 +119,6 @@ function handleScan(barcode) {
             productEl.classList.add("error");
         });
 }
-
-// Клік — теж повертає фокус
-document.body.addEventListener("click", keepFocus);
 </script>
 </body>
 </html>
