@@ -8,8 +8,8 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
       background: #f2f2f2;
+      padding: 20px;
       margin: 0;
     }
 
@@ -17,27 +17,14 @@
       margin-top: 0;
     }
 
-    #priceDisplay {
-      padding: 25px;
-      background: #fff;
-      border-radius: 10px;
-      margin-top: 20px;
-      transition: background-color 0.3s;
-    }
-
-    :root {
-      --ok: #a8f3a8;
-      --err: #ffb3b3;
-    }
-
     input#barcode {
       width: 100%;
       font-size: 26px;
       padding: 12px;
       box-sizing: border-box;
-      border-radius: 8px;
       border: 2px solid #f5b400;
-      outline: none;
+      border-radius: 8px;
+      background: #fff;
     }
 
     .controls {
@@ -45,9 +32,28 @@
     }
 
     button {
-      padding: 10px 15px;
+      padding: 10px 16px;
       font-size: 16px;
       margin-right: 10px;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+
+    #priceDisplay {
+      margin-top: 20px;
+      padding: 25px;
+      background: #fff;
+      border-radius: 10px;
+      transition: background-color 0.25s;
+    }
+
+    :root {
+      --ok: #a8f3a8;
+      --err: #ffb3b3;
     }
 
     .product-name {
@@ -60,48 +66,39 @@
       color: #0057b7;
       margin-top: 10px;
     }
-
-    .muted {
-      color: #666;
-      font-size: 14px;
-      margin-top: 5px;
-    }
   </style>
 </head>
 
 <body>
 
-  <h2>Перевірка ціни</h2>
+<h2>Перевірка ціни</h2>
 
-  <!-- ВАЖЛИВО: readonly + inputmode=none -->
-  <input
-    id="barcode"
-    type="text"
-    placeholder="Скануйте штрихкод"
-    autocomplete="off"
-    autocapitalize="off"
-    inputmode="none"
-    readonly
-  >
+<!-- input ТІЛЬКИ для фокуса -->
+<input
+  id="barcode"
+  type="text"
+  placeholder="Скануйте штрихкод"
+  disabled
+>
 
-  <div class="controls">
-    <button id="updateCacheBtn">Оновити базу</button>
-    <button id="clearCacheBtn">Очистити кеш</button>
-    <div class="muted">
-      Останнє оновлення: <span id="lastUpdate">немає</span>
-    </div>
+<div class="controls">
+  <button id="updateCacheBtn">Оновити базу</button>
+  <button id="clearCacheBtn">Очистити кеш</button>
+  <div class="muted">
+    Останнє оновлення: <span id="lastUpdate">немає</span>
   </div>
+</div>
 
-  <div id="priceDisplay">
-    <h3 id="productName" class="product-name">Назва товару</h3>
-    <div id="productPrice" class="product-price">Ціна</div>
-  </div>
+<div id="priceDisplay">
+  <h3 id="productName" class="product-name">Назва товару</h3>
+  <div id="productPrice" class="product-price">Ціна</div>
+</div>
 
-  <div id="loadingInfo" class="muted"></div>
+<div id="loadingInfo" class="muted"></div>
 
-  <audio id="beep" preload="auto">
-    <source src="beep.wav" type="audio/wav">
-  </audio>
+<audio id="beep" preload="auto">
+  <source src="beep.wav" type="audio/wav">
+</audio>
 <script>
 (function () {
 
@@ -120,50 +117,36 @@
   const loadingInfo = document.getElementById('loadingInfo');
   const beep = document.getElementById('beep');
 
-  let isScanning = false;
-  let scanTimer = null;
-
-  function normalize(code) {
-    return String(code || '').replace(/[\s\r\n]+/g, '').trim();
-  }
-
+  /* =========================
+     ФОКУС (для WebView)
+  ========================== */
   function forceFocus() {
-    setTimeout(() => {
-      input.focus();
-      input.click();
-    }, 100);
-
-    setTimeout(() => {
-      input.focus();
-    }, 500);
+    setTimeout(() => input.focus(), 100);
   }
 
-  input.addEventListener('focus', () => {
-    input.removeAttribute('readonly');
-  });
-
-  input.addEventListener('blur', () => {
-    input.setAttribute('readonly', 'readonly');
-  });
-
+  /* =========================
+     ЗВУК
+  ========================== */
   function playBeep() {
     try {
       beep.currentTime = 0;
       beep.play();
-    } catch (e) {}
+    } catch {}
   }
 
+  /* =========================
+     КЕШ
+  ========================== */
   function renderLastUpdate() {
     const ts = localStorage.getItem(CACHE_TS_KEY);
-    if (!ts) return;
-    lastUpdateEl.textContent = new Date(+ts).toLocaleString();
+    if (ts) {
+      lastUpdateEl.textContent = new Date(+ts).toLocaleString();
+    }
   }
 
   async function loadCache(force = false) {
     const ts = localStorage.getItem(CACHE_TS_KEY);
-    const now = Date.now();
-
-    if (!force && ts && (now - ts < DAY_MS)) {
+    if (!force && ts && Date.now() - ts < DAY_MS) {
       renderLastUpdate();
       forceFocus();
       return;
@@ -178,7 +161,7 @@
 
       (data.products || []).forEach(p => {
         if (p.barcode) {
-          map[normalize(p.barcode)] = {
+          map[String(p.barcode).trim()] = {
             name: p.name || 'Без назви',
             price: p.price || ''
           };
@@ -190,12 +173,14 @@
       renderLastUpdate();
       loadingInfo.textContent = '';
       forceFocus();
-
-    } catch (e) {
+    } catch {
       loadingInfo.textContent = 'Помилка оновлення';
     }
   }
 
+  /* =========================
+     ВІДОБРАЖЕННЯ
+  ========================== */
   function showProduct(p) {
     if (p) {
       nameEl.textContent = p.name;
@@ -213,19 +198,42 @@
     }, 600);
   }
 
-  async function handleScan() {
-    if (isScanning) return;
-    isScanning = true;
+  /* =========================
+     СКАНЕР (КЛЮЧОВЕ!)
+  ========================== */
+  let scanBuffer = '';
+  let scanTimer = null;
+  const SCAN_DELAY = 50;
 
-    const code = normalize(input.value);
-    input.value = '';
+  document.addEventListener('keydown', (e) => {
 
-    if (!code) {
-      isScanning = false;
-      forceFocus();
+    // ігноруємо пульт
+    if (e.key.startsWith('Arrow')) return;
+
+    // ENTER — кінець штрихкоду
+    if (e.key === 'Enter') {
+      if (scanBuffer.length >= 6) {
+        processBarcode(scanBuffer);
+      }
+      scanBuffer = '';
       return;
     }
 
+    // тільки цифри
+    if (!/^[0-9]$/.test(e.key)) return;
+
+    scanBuffer += e.key;
+
+    clearTimeout(scanTimer);
+    scanTimer = setTimeout(() => {
+      if (scanBuffer.length >= 6) {
+        processBarcode(scanBuffer);
+      }
+      scanBuffer = '';
+    }, SCAN_DELAY);
+  });
+
+  async function processBarcode(code) {
     const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
 
     if (cache[code]) {
@@ -245,15 +253,12 @@
       }
     } catch {}
 
-    isScanning = false;
     forceFocus();
   }
 
-  input.addEventListener('input', () => {
-    clearTimeout(scanTimer);
-    scanTimer = setTimeout(handleScan, 40);
-  });
-
+  /* =========================
+     КНОПКИ
+  ========================== */
   updateBtn.onclick = () => loadCache(true);
   clearBtn.onclick = () => {
     localStorage.clear();
@@ -261,6 +266,9 @@
     forceFocus();
   };
 
+  /* =========================
+     INIT
+  ========================== */
   (function init() {
     if (!localStorage.getItem(CACHE_KEY)) {
       localStorage.setItem(CACHE_KEY, '{}');
