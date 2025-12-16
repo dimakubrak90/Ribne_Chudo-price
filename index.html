@@ -9,15 +9,19 @@
   body {
     font-family: Arial, sans-serif;
     padding: 20px;
-    background: #f2f2f2;
+    background: #e0f7ff;
   }
+
   #priceDisplay {
+    position: relative;
     padding: 20px;
-    background: #fff;
+    background: linear-gradient(to bottom right, #fff9e6, #e6f7ff);
     border-radius: 10px;
+    border: 2px solid #0057b7;
     margin-top: 20px;
-    transition: background-color 0.25s;
+    overflow: hidden;
   }
+
   .controls { margin-top: 15px; }
   button { padding: 10px 15px; margin-right: 10px; }
 
@@ -34,12 +38,58 @@
   }
 
   .product-name { font-size: 30px; margin: 0; }
-  .product-price { font-size: 22px; color: #0057b7; }
+  .product-price {
+    font-size: 48px;
+    font-weight: bold;
+    color: #0057b7;
+    margin-top: 10px;
+  }
+
   .muted { color: #666; font-size: 14px; }
+
+  /* Псевдоелемент для миготіння */
+  #priceDisplay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    opacity: 0;
+  }
+
+  .flash-ok::before {
+    animation: flashOk 3s ease;
+  }
+
+  .flash-err::before {
+    animation: flashErr 3s ease;
+  }
+
+  @keyframes flashOk {
+    0%   { background: var(--ok); opacity: 0.8; }
+    50%  { background: #ffffff; opacity: 0.4; }
+    100% { background: var(--ok); opacity: 0.8; }
+  }
+
+  @keyframes flashErr {
+    0%   { background: var(--err); opacity: 0.8; }
+    50%  { background: #ffffff; opacity: 0.4; }
+    100% { background: var(--err); opacity: 0.8; }
+  }
+
+  /* Щоб текст був поверх миготіння */
+  #priceDisplay > * {
+    position: relative;
+    z-index: 1;
+  }
 </style>
 </head>
 
 <body>
+
+<!-- Центрований логотип -->
+<div style="text-align:center;">
+  <img src="logo.png" alt="Рибне чудо" style="height:120px; max-width:90%; margin-bottom:10px;">
+</div>
 
 <h2>Перевірка ціни</h2>
 
@@ -50,7 +100,6 @@
   autofocus
   autocomplete="off"
   autocapitalize="off"
-  inputmode="none"
 />
 
 <div id="loadingInfo" class="muted" style="margin-top:10px;"></div>
@@ -69,11 +118,8 @@
 <audio id="beep" preload="auto">
   <source src="beep.wav" type="audio/wav">
 </audio>
-
 <script>
 (function () {
-
-  /* ================== КОНСТАНТИ ================== */
   const SCRIPT_URL =
     'https://script.google.com/macros/s/AKfycbwZP14KXpQPgRCzR-ITop_yPcyOqXV0MKJt6uLK-HkKEwD7juo71zcJfNbycTB2X6ofWg/exec';
 
@@ -81,7 +127,6 @@
   const CACHE_TS_KEY = 'p_cache_ts_v1';
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  /* ================== DOM ================== */
   const input = document.getElementById('barcode');
   const nameEl = document.getElementById('productName');
   const priceEl = document.getElementById('productPrice');
@@ -92,7 +137,6 @@
   const clearBtn = document.getElementById('clearCacheBtn');
   const beep = document.getElementById('beep');
 
-  /* ================== УТИЛІТИ ================== */
   function normalizeCode(code) {
     return String(code).replace(/[\s\r\n]+/g, '').trim();
   }
@@ -116,24 +160,26 @@
     try { beep.play().catch(() => {}); } catch {}
   }
 
+  // Показ продукту з миготінням поверх градієнта (3 секунди)
   function showProduct(product) {
     if (product) {
       nameEl.textContent = product.name;
       priceEl.textContent = `Ціна за одиницю (опт): ${product.price} грн`;
-      priceBox.style.backgroundColor = 'var(--ok)';
       playBeep();
+
+      priceBox.classList.remove('flash-ok', 'flash-err');
+      void priceBox.offsetWidth;
+      priceBox.classList.add('flash-ok');
     } else {
       nameEl.textContent = '❌ Товар не знайдено';
       priceEl.textContent = '';
-      priceBox.style.backgroundColor = 'var(--err)';
-    }
 
-    setTimeout(() => {
-      priceBox.style.backgroundColor = '#fff';
-    }, 500);
+      priceBox.classList.remove('flash-ok', 'flash-err');
+      void priceBox.offsetWidth;
+      priceBox.classList.add('flash-err');
+    }
   }
 
-  /* ================== КЕШ ================== */
   async function loadCache(force = false) {
     try {
       const ts = localStorage.getItem(CACHE_TS_KEY);
@@ -141,7 +187,7 @@
 
       if (!force && ts && now - Number(ts) < DAY_MS) {
         loadingInfo.textContent = '✅ База з кешу';
-        setTimeout(() => loadingInfo.textContent = '', 1200);
+        setTimeout(() => (loadingInfo.textContent = ''), 1200);
         renderLastUpdate();
         return;
       }
@@ -165,36 +211,28 @@
       localStorage.setItem(CACHE_KEY, JSON.stringify(map));
       localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
 
-      loadingInfo.textContent =
-        `✅ База оновлена (${Object.keys(map).length})`;
-
+      loadingInfo.textContent = `✅ База оновлена (${Object.keys(map).length})`;
       renderLastUpdate();
-      setTimeout(() => loadingInfo.textContent = '', 2000);
-
+      setTimeout(() => (loadingInfo.textContent = ''), 2000);
     } catch {
       loadingInfo.textContent = '⚠️ Помилка завантаження';
-      setTimeout(() => loadingInfo.textContent = '', 3000);
+      setTimeout(() => (loadingInfo.textContent = ''), 3000);
     }
   }
 
-  /* ================== СКАНЕР (БЕЗ БЛОКУВАНЬ) ================== */
+  // Показ лише один раз: спочатку кеш; сервер тихо оновлює кеш
   function handleScan() {
     const code = normalizeCode(input.value);
     input.value = '';
     input.focus();
-
     if (!code) return;
 
     console.log('SCAN:', code);
 
-    /* 1️⃣ миттєво з кешу */
     const cached = searchInCache(code);
     showProduct(cached);
 
-    /* 2️⃣ сервер — у фоні */
-    fetch(`${SCRIPT_URL}?barcode=${encodeURIComponent(code)}`, {
-      cache: 'no-store'
-    })
+    fetch(`${SCRIPT_URL}?barcode=${encodeURIComponent(code)}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         const p = data?.data;
@@ -205,16 +243,13 @@
           price: String(p.price || '')
         };
 
-        showProduct(product);
-
         const map = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
-        map[code] = product;
+        map[normalizeCode(code)] = product;
         localStorage.setItem(CACHE_KEY, JSON.stringify(map));
       })
       .catch(() => {});
   }
 
-  /* ================== EVENTS ================== */
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -229,10 +264,9 @@
     localStorage.removeItem(CACHE_TS_KEY);
     renderLastUpdate();
     loadingInfo.textContent = '🗑️ Кеш очищено';
-    setTimeout(() => loadingInfo.textContent = '', 1200);
+    setTimeout(() => (loadingInfo.textContent = ''), 1200);
   };
 
-  /* ================== INIT ================== */
   (function init() {
     if (!localStorage.getItem(CACHE_KEY)) {
       localStorage.setItem(CACHE_KEY, '{}');
@@ -241,9 +275,7 @@
     loadCache(false);
     input.focus();
   })();
-
 })();
 </script>
-
 </body>
 </html>
