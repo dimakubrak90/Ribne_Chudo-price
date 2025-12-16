@@ -1,92 +1,85 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Сканер цін</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сканер цін</title>
 
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-    background: #e0f7ff;
-  }
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #e0f7ff;
+    }
 
-  #priceDisplay {
-    position: relative;
-    padding: 20px;
-    background: linear-gradient(to bottom right, #fff9e6, #e6f7ff);
-    border-radius: 10px;
-    border: 2px solid #0057b7;
-    margin-top: 20px;
-    overflow: hidden;
-  }
+    #priceDisplay {
+      position: relative;
+      padding: 20px;
+      background: linear-gradient(to bottom right, #fff9e6, #e6f7ff);
+      border-radius: 10px;
+      border: 2px solid #0057b7;
+      margin-top: 20px;
+      overflow: hidden;
+    }
 
-  .controls { margin-top: 15px; }
-  button { padding: 10px 15px; margin-right: 10px; }
+    #priceDisplay::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
 
-  :root {
-    --ok: #a8f3a8;
-    --err: #ffb3b3;
-  }
+    .flash-ok::before {
+      animation: flashOk 3s ease;
+    }
 
-  input#barcode {
-    width: 100%;
-    font-size: 26px;
-    padding: 12px;
-    box-sizing: border-box;
-  }
+    .flash-err::before {
+      animation: flashErr 3s ease;
+    }
 
-  .product-name { font-size: 30px; margin: 0; }
-  .product-price {
-    font-size: 48px;
-    font-weight: bold;
-    color: #0057b7;
-    margin-top: 10px;
-  }
+    @keyframes flashOk {
+      0%   { background: #a8f3a8; opacity: 0.8; }
+      50%  { background: #ffffff; opacity: 0.4; }
+      100% { background: #a8f3a8; opacity: 0.8; }
+    }
 
-  .muted { color: #666; font-size: 14px; }
+    @keyframes flashErr {
+      0%   { background: #ffb3b3; opacity: 0.8; }
+      50%  { background: #ffffff; opacity: 0.4; }
+      100% { background: #ffb3b3; opacity: 0.8; }
+    }
 
-  /* Псевдоелемент для миготіння */
-  #priceDisplay::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    opacity: 0;
-  }
+    #priceDisplay > * {
+      position: relative;
+      z-index: 1;
+    }
 
-  .flash-ok::before {
-    animation: flashOk 3s ease;
-  }
+    .controls { margin-top: 15px; }
+    button { padding: 10px 15px; margin-right: 10px; }
 
-  .flash-err::before {
-    animation: flashErr 3s ease;
-  }
+    input#barcode {
+      width: 100%;
+      font-size: 26px;
+      padding: 12px;
+      box-sizing: border-box;
+    }
 
-  @keyframes flashOk {
-    0%   { background: var(--ok); opacity: 0.8; }
-    50%  { background: #ffffff; opacity: 0.4; }
-    100% { background: var(--ok); opacity: 0.8; }
-  }
+    .product-name { font-size: 30px; margin: 0; }
+    .product-price {
+      font-size: 48px;
+      font-weight: bold;
+      color: #0057b7;
+      margin-top: 10px;
+    }
 
-  @keyframes flashErr {
-    0%   { background: var(--err); opacity: 0.8; }
-    50%  { background: #ffffff; opacity: 0.4; }
-    100% { background: var(--err); opacity: 0.8; }
-  }
-
-  /* Щоб текст був поверх миготіння */
-  #priceDisplay > * {
-    position: relative;
-    z-index: 1;
-  }
-</style>
+    .muted { color: #666; font-size: 14px; }
+  </style>
 </head>
 
 <body>
 
-<!-- Центрований логотип -->
 <div style="text-align:center;">
   <img src="logo.png" alt="Рибне чудо" style="height:120px; max-width:90%; margin-bottom:10px;">
 </div>
